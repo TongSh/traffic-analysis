@@ -1,3 +1,4 @@
+from math import *
 def angle_avg(angle,n):
     diff = 0.0
     last = angle[0]
@@ -11,8 +12,10 @@ def angle_avg(angle,n):
     sum = float(sum)
     return (sum/n)%360
 
-# a = [350,10,10,340,150,180,190,200]
-# print angle_avg(a,8)
-a = [88.75]*8
-a.append(350)
-print angle_avg(a,9)
+
+lat1,lon1,lat2,lon2 = 39.89845,116.47154,39.89855,116.47154
+
+a = lat1 - lat2
+b = lon1 - lon2
+s = 2*asin(sqrt(sin(a/2)*sin(a/2)+cos(lat1)*cos(lat2)*sin(b/2)*sin(b/2)))*6378.13
+print s

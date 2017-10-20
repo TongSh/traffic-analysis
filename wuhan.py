@@ -244,9 +244,7 @@ def findTrip():
 					# 统计方向变化
 					angle_now = dir
 					# cruise终止条件
-					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,
-																			cruise_start_angle) > 45 or deltaAngle(
-							angle_now, cruise_average_angle) > 30:
+					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(angle_now, cruise_average_angle) > 30:
 						# 一段cruise结束了
 						if cruiseEndTime - cruiseStartTime > 0:  #排除10秒以下的cruise
 							str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(
@@ -316,9 +314,7 @@ def findTrip():
 		cruiseEndTime = tripEndTime  # 一段cruise结束了
 		# 排除10秒以下的cruise
 		if cruiseEndTime - cruiseStartTime > 0:
-			str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(
-				cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(
-				cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
+			str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
 			f_w.write(str_w)
 		# 接下来重新开始一段trip
 		tripNumber = tripNumber + 1
@@ -352,7 +348,7 @@ def findLongTrip():
 				timeSec = int(line[2])  # trip中一个cruise时间片
 				trip_time += timeSec
 				line_org = f_r.readline()
-			if trip_time < 0:
+			if trip_time <= 0:
 				continue  # 淘汰持续时间少于60s的trip
 			# 否则要将这段trip写到统计文件中
 			try:
@@ -375,7 +371,7 @@ def findLongTrip():
 			f_w.close()
 			f_r.close()
 
-
+findLongTrip()
 # 直观展示怎么切割trip和cruise
 def showTrip():
 	s = os.sep  # 根据unix或win，s为\或/
@@ -502,6 +498,7 @@ def showTrip():
 		#文件末尾，意味着一段trip的结束
 		# 首先先考虑，这意味着一段cruise结束了。
 		cruiseEndTime = tripEndTime
+		#f_w.write(line_old)  # 这行stop写在标记后
 		# 排除10秒以下的cruise
 		if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
 			f_w.write(' cruise END ###################################\n')
@@ -514,11 +511,10 @@ def showTrip():
 		if duration < 60:  # 小于60s记录的情况，不要
 			# 接下来重新开始一段trip,trip标号不变化
 			f_w.write(' trip DROP ====================================\n')
-			f_w.write(line_old)  # 这行stop写在标记后
+
 			cruiseNumber = 1  # 由于被抛弃，trip编号不改变
 		else:
 			f_w.write(' trip END =====================================\n')
-			f_w.write(line_old)  # 这行stop写在标记后
 			tripNumber = tripNumber + 1  # 接下来重新开始一段trip
 			cruiseNumber = 1
 		f_r.close()
@@ -661,9 +657,10 @@ def dirDistribution():
 		c = c + 1
 	f_w.close()
 
-findLongTrip()
+#findLongTrip()
 #findDirection()
 #findTrip()
 #dirDistribution()
 # average()
 # cruise()
+showTrip()

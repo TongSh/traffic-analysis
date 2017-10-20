@@ -1,0 +1,4 @@
+trip_average 222.759033983
+trip_count 27867
+cruise_average 100.215133268
+cruise_count 61943
