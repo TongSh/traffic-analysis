@@ -166,7 +166,7 @@ def washData():
 			line_org = f_r.readline()  # 读新行
 
 def distance(position1,position2):
-	return sqrt((position1[0] - position2[0])*(position1[0] - position2[0]) + (position1[1] - position2[1])*(position1[1] - position2[1]))
+	return sqrt((position1[0] - position2[0])*(position1[0] - position2[0])*3750*3750 + (position1[1] - position2[1])*(position1[1] - position2[1])*6378*6378)
 #数据源包括10357辆出租车样本，只记录各车在各时刻的坐标
 #求汽车各个时刻的行驶方向
 #时刻1的行驶方向由时刻1+时刻2两点的坐标求出，以此类推
@@ -220,7 +220,8 @@ def findDirection():
 			except ValueError:
 				continue
 			if state == 'stop':#如果当前是停止状态
-				if abs(lon_now - lon_before) < 0.00267 and abs(lat_now - lat_before) < 0.00167:#且当前这条记录相较于上条也静止，保存静止状态，写出
+				#if abs(lon_now - lon_before) < 0.00267 and abs(lat_now - lat_before) < 0.00167:#且当前这条记录相较于上条也静止，保存静止状态，写出
+				if distance([lon_now,lat_now],[lon_before,lat_before]) < 10:
 					if judge_move:
 						# 这个检查周期作废了
 						# 清空待写出列表
@@ -470,7 +471,7 @@ def findLongTrip():
 				continue#淘汰持续时间少于60s的trip
 			#否则要将这段trip写到统计文件中
 			try:
-				f_w = open(root + s + 'total.csv', 'a')
+				f_w = open(out + s + num+'.csv', 'a')
 			except IOError:
 				continue
 			#为了写而重新读取
@@ -490,8 +491,7 @@ def findLongTrip():
 			f_w.close()
 			f_r.close()
 
-
-
+findLongTrip()
 #直观展示怎么切割trip和cruise
 def showTrip():
 	s = os.sep  # 根据unix或win，s为\或/
@@ -643,7 +643,7 @@ def showTrip():
 			cruiseNumber = 1
 		f_r.close()
 		f_w.close()
-showTrip()
+
 # 统计trip和crise的平均持续时间
 def average():
 	s = os.sep  # 根据unix或win，s为\或/
@@ -689,7 +689,7 @@ def average():
 	print 'trip_count', trip_count
 	print 'cruise_average', cruise_average
 	print 'cruise_count', cruise_count
-
+average()
 # 统计cruise时间的分布情况
 def cruise():
 	s = os.sep  # 根据unix或win，s为\或/

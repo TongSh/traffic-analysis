@@ -13,9 +13,9 @@ def angle_avg(angle,n):
     return (sum/n)%360
 
 
-lat1,lon1,lat2,lon2 = 39.89855,116.47144,39.89855,116.47154
+lat1,lon1,lat2,lon2 = 39.89855,116.47144,39.89845,116.47144
 
 a = lat1 - lat2
 b = lon1 - lon2
 s = 2*asin(sqrt(sin(a/2)*sin(a/2)+cos(lat1)*cos(lat2)*sin(b/2)*sin(b/2)))*6378.13
-print 0.0001/s
+print s
