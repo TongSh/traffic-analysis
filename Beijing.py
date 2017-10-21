@@ -177,7 +177,7 @@ def findDirection():
 	#写出文件夹
 	s = os.sep  # 根据unix或win，s为\或/
 	root = r'E:' + s + 'VNDN' + s + 'Beijing'
-	out1 = r'E:\VNDN\Beijing\direction result 60sec\\'
+	out1 = r'E:\VNDN\5minBeijing\direction result 60sec\\'
 	mkdir(out1)
 	dir_result = r'E:\VNDN\Beijing\60sec_taxi_log_2008_by_id'
 	list = os.listdir(dir_result)  # 列出目录下的所有文件
@@ -189,7 +189,7 @@ def findDirection():
 		except IOError:
 			continue
 		# 行驶方向结果写出
-		w_filename2 = r'E:\VNDN\Beijing\direction result 60sec\\' + line.split('.')[0] + '.csv'
+		w_filename2 = r'E:\VNDN\5minBeijing\direction result 60sec\\' + line.split('.')[0] + '.csv'
 		try:
 			f_w = open(w_filename2, 'w')
 		except IOError:
@@ -233,6 +233,7 @@ def findDirection():
 					if judge_move:#在一个move检查周期内（检查move有没有达到5min & 运动距离有没有大于1km）
 						if (time_now - judge_move_start_time) > 60 :#and distance([lon_now,lat_now],judge_move_start_position) > 100:
 							state = 'move'
+							judge_stop = False
 							#写出列表里的待写出项
 							for str_item in move_pending_array:
 								f_w.write(str_item)
@@ -266,8 +267,9 @@ def findDirection():
 					f_w.write(w_str)
 					count += 1
 				else:#这条记录相比于上一条是静止的，检查静止持续时间
-					if judge_stop:#在一个stop检查周期内（检查stop有没有达到5min）
+					if judge_stop:#在一个stop检查周期内（检查stop有没有达到10min）
 						if (time_now - judge_stop_start_time) > 600:
+							judge_move = False
 							state = 'stop'
 							w_str = str(-1) + ',stop,' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) + '\n'
 							f_w.write(w_str)
@@ -293,7 +295,7 @@ def deltaAngle(angle1, angle2):
 #求出租车各段trip持续时间以及每段trip方向变化次数
 def findTrip():
 	s = os.sep  # 根据unix或win，s为\或/
-	root = r'E:' + s + 'VNDN' + s + 'Beijing'
+	root = r'E:' + s + 'VNDN' + s + '5minBeijing'
 	dir_result = root + s + 'direction result 60sec\\'  # 车辆方向结果
 	out = root + s + 'Trip Cruise\\'
 	mkdir(out)
@@ -443,7 +445,7 @@ def findTrip():
 #遍历findTrip中输出的各个trip文件，选择其中长度大于60s的，生成trip&cruise统计（每车一个文件）
 def findLongTrip():
 	s = os.sep  # 根据unix或win，s为\或/
-	root = r'E:' + s + 'VNDN' + s + 'Beijing'
+	root = r'E:' + s + 'VNDN' + s + '5minBeijing'
 	trip_dir = root + s + 'Trip Cruise'
 	out = root + s + ' Long Trip Cruise'
 	mkdir(out)
@@ -491,12 +493,11 @@ def findLongTrip():
 			f_w.close()
 			f_r.close()
 
-findLongTrip()
 #直观展示怎么切割trip和cruise
 def showTrip():
 	s = os.sep  # 根据unix或win，s为\或/
-	root = r'E:' + s + 'VNDN' + s + 'Beijing'
-	datasourse = r'E:' + s + 'VNDN' + s + 'Beijing' + s + 'direction result 60sec\\'  # 车辆方向结果
+	root = r'E:' + s + 'VNDN' + s + '5minBeijing'
+	datasourse = r'E:' + s + 'VNDN' + s + '5minBeijing' + s + 'direction result 60sec\\'  # 车辆方向结果
 	mkdir(root + s + 'SHOW\\')
 	list = os.listdir(datasourse)  # 列出目录下的所有文件
 	for line in list:
@@ -618,7 +619,9 @@ def showTrip():
 					count_for_average = 1
 					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
 				else:
+					#f_w.write(line_old)
 					continue#保持静止，就不一直写出stop了
+
 		# 首先先考虑，这意味着一段cruise结束了。
 		cruiseEndTime = tripEndTime
 		# 排除只有一条记录的cruise
@@ -647,7 +650,7 @@ def showTrip():
 # 统计trip和crise的平均持续时间
 def average():
 	s = os.sep  # 根据unix或win，s为\或/
-	tc_result = r'E:' + s + 'VNDN' + s + 'Beijing' + s + ' Long Trip Cruise'  # 车辆trip和cruise结果
+	tc_result = r'E:' + s + 'VNDN' + s + '5minBeijing' + s + ' Long Trip Cruise'  # 车辆trip和cruise结果
 	# 定义全局的变量：平均trip，平均cruise，trip计数，cruise计数
 	trip_average = 0.0
 	cruise_average = 0.0
@@ -689,7 +692,7 @@ def average():
 	print 'trip_count', trip_count
 	print 'cruise_average', cruise_average
 	print 'cruise_count', cruise_count
-average()
+
 # 统计cruise时间的分布情况
 def cruise():
 	s = os.sep  # 根据unix或win，s为\或/
@@ -771,7 +774,7 @@ def dirDistribution():
 		f_w.write(str_f)
 		c = c + 1
 	f_w.close()
-
+#dirDistribution()
 #findDirection()
 #findTrip()
 #dirDistribution()

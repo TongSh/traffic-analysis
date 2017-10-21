@@ -368,7 +368,62 @@ def average():
 	print 'cruise_average',cruise_average
 	print 'cruise_count',cruise_count
 
-
+#首先筛选出满足时间间隔是否符合规范（60sec以内）的数据源文件
+def washData():
+	s = os.sep  # 根据unix或win，s为\或/
+	root = r'E:' + s + 'datasets' + s + 'NewChengdu' + s + 'cabspottingdata'
+	out = r'E:'+s+'VNDN'+s+'Chengdu'+s+'60sec_taxi_log_2008_by_id'
+	mkdir(out)
+	for i in range(1, 5000):
+		filename = root + s + str(i) + '.csv'
+		try:
+			print filename
+			f_r = open(filename, 'r')
+		except IOError:
+			print IOError
+			continue
+		# 先检查
+		# 不符合规范就淘汰这个文件
+		line_org = f_r.readline()  # 首行title 调用文件的 readline()方法
+		count = 0
+		average_gap_time = 0.0
+		# 一行行读
+		while line_org:
+			line = line_org.split(',')
+			# 时刻1
+			time1 = int(line[3].split('.')[0])
+			line_org = f_r.readline()  # 读新行
+			# 如果新行已经是文件尾，跳出
+			if not line_org:
+				break
+			line = line_org.split(',')
+			# 时刻2
+			time2 = int(line[3].split('.')[0])
+			gap_time = abs(time2 - time1)
+			if gap_time == 0 or gap_time > 3600:
+				continue#排除掉同一时刻输出两条记录
+			average_gap_time = (average_gap_time * count + gap_time) / (count + 1)
+			count += 1
+		print average_gap_time
+		if average_gap_time > 10:
+			f_r.close()
+			continue  # 淘汰这个文件
+		#否则把这个文件倒腾出来
+		f_r.close()
+		try:
+			m_w = open(out + s +str(i) + '.csv', 'w')
+		except IOError:
+			continue
+		try:
+			f_r = open(filename, 'r')
+		except IOError:
+			continue
+		line_org = f_r.readline()  # 首行title 调用文件的 readline()方法
+		# 一行行读
+		while line_org:
+			m_w.write(line_org)
+			line_org = f_r.readline()  # 读新行
+washData()
 
 
 #统计cruise时间的分布情况
@@ -411,4 +466,4 @@ def cruise():
 
 
 #cruise()
-average()
+#average()
