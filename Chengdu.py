@@ -95,59 +95,181 @@ def mkdir(path):
 		print path + ' 目录已存在'
 		return False
 
-#样本数据集包含10000+辆成都出租车的行驶轨迹记录，每两次采样的时间间隔约为10~30sec
-#求各时刻出租车的行驶方向，这里需要格外注意相邻两时刻坐标相同的情况，这意味着车辆静止，是一段trip结束的标志
-def direction1():
-	s = os.sep  # 根据unix或win，s为\或/
-	root = r'E:' + s + 'datasets' + s + 'NewChengdu' + s + 'cabspottingdata'#这辆车的所有记录都存在这个文件夹下
-	dir_result = r'E:' + s + 'datasets' + s + 'NewChengdu' + s + 'direction result\\'#保存车辆个各时刻的方向
-	mkdir(dir_result)#结果存到这个文件夹下
-	list = os.listdir(root)  # 列出记录目录下的所有文件
+#输入两点经纬度，输出距离（单位：米）
+def distance(position1,position2):
+	a = position1[1] - position2[1]
+	b = position1[0] - position2[0]
+	distance = 2*asin(sqrt(sin(a/2)*sin(a/2)+cos(position1[1])*cos(position2[1])*sin(b/2)*sin(b/2)))*6378.13
+	return distance
 
+#样本数据集包含10000+辆成都出租车的行驶轨迹记录，每两次采样的时间间隔约为10~15sec
+def findDirection():
+	# 依次读各个文件
+	#写出文件夹
+	s = os.sep  # 根据unix或win，s为\或/
+	root = r'E:' + s + 'VNDN' + s + 'Chengdu'
+	out1 = root + s + 'direction result 60sec'
+	mkdir(out1)
+	data_sourse = root + s + '60sec_taxi_log_2008_by_id'
+	list = os.listdir(data_sourse)  # 列出目录下的所有文件
 	for line in list:
-		print line
-		filename = root+s+line
+		filename2 = data_sourse + s + line
+		print filename2
 		try:
-			f_r = open(filename, 'r')
+			f_r = open(filename2, 'r')
 		except IOError:
 			continue
+
 		# 行驶方向结果写出
-		w_filename = dir_result + s + line.split('.')[0] + '.csv'
+		w_filename2 = out1 + s + line.split('.')[0] + '.csv'
 		try:
-			f_w = open(w_filename, 'w')
+			f_w = open(w_filename2, 'w')
 		except IOError:
 			continue
-		line_org = f_r.readline()  # 首行title 调用文件的 readline()方法
+		line_before = f_r.readline()  # 第一行不能主动跟别人比对
+		line_now = f_r.readline()#line_now可以跟line_before比对
 		count = 1
-		# 一行行读
-		while line_org:
-			line = line_org.split(',')
-			# 时刻1坐标
-			lon1 = float(line[2])
-			lat1 = float(line[1])
-			#记录时间
-			timeSec = line[3]
-			line_org = f_r.readline()  # 读新行
-			# 如果新行已经是文件尾，跳出
-			if not line_org:
-				break
-			line = line_org.split(',')
-			# 时刻2坐标
-			lon2 = float(line[2])
-			lat2 = float(line[1])
-			# 如果两点重合，额外标注
-			if lon1 == lon2 and lat1 == lat2:
-				w_str = '-1,stop,' + timeSec
-				f_w.write(w_str)
+		state = 'move'
+		if line_before:#排除空文件第一行为空的危险
+			state_start_time = int(line_before.split(',')[3].split('.')[0])
+		state_end_time = 0.0
+		#用来判断停车时间是否构成5min
+		judge_stop = False
+		judge_stop_start_time = 0.0
+		#用来判断运动时间是否达到5min
+		judge_move = False
+		judge_move_start_time = 0.0
+		judge_move_start_position = [0.0, 0.0]
+		move_pending_array = []
+		stop_pending_array = []
+		while line_now:
+			#首先读取当前时刻和上一时刻的数据
+			try:
+				lon_now,lat_now,time_now = float(line_now.split(',')[2]),float(line_now.split(',')[1]),int(line_now.split(',')[3].split('.')[0])
+			except ValueError:
 				continue
-			angle = calAngle2(lat1, lon1, lat2, lon2)
-			w_str = str(count) + ',' + str(angle) + ',' + timeSec
-			#print w_str
-			#print lat1, lon1, lat2, lon2
-			f_w.write(w_str)
-			count = count + 1
+			try:
+				lon_before,lat_before,time_before = float(line_before.split(',')[2]),float(line_before.split(',')[1]),int(line_before.split(',')[3].split('.')[0])
+			except ValueError:
+				continue
+			dis = distance([lon_now,lat_now],[lon_before,lat_before])
+
+			# 特别处理时间间隔大于3600的情况
+			if abs(time_now - time_before) > 3600:
+				if state == 'stop':
+					if judge_move:  # 这时需要把这些记录当作停止记录写出去
+						judge_move = False  # 初始化运动状态切换到静止态的判断条件
+						# 写出列表里的待写出项（历史项）
+						for str_item in move_pending_array:
+							rec = str_item.split(',')
+							w_str = '-1,stop,' + rec[2] + ',' + rec[3] + ',' + rec[4] + ',' + rec[5]
+							f_w.write(w_str)
+						move_pending_array = []  # 写出后，清空数组
+					# 输出现在的这条stop记录
+					w_str = '-1,stop,' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) + ',' + str(dis) + '\n'
+					f_w.write(w_str)
+					judge_move = False
+				else:
+					if judge_stop:  # 需要把待定stop的记录变成真的stop
+						for str_item in stop_pending_array:
+							rec = str_item.split(',')
+							w_str = str(-1) + ',stop,' + rec[2] + ',' + rec[3] + ',' + rec[4] + ',' + rec[5]
+							f_w.write(w_str)
+						stop_pending_array = []  # 写出后，清空数组
+						state = 'stop'  # 将状态切换到stop状态
+						judge_move = False
+					else:  # 否则将当前这条（3600后的第一条）作为stop处理
+						# 输出现在的这条stop记录
+						w_str = str(-1) + ',stop,' + str(time_now) + ',' + str(lon_now) + ',' + str(
+							lat_now) + ',' + str(dis) + '\n'
+						f_w.write(w_str)
+						state = 'stop'  # 将状态切换到stop状态
+						judge_move = False
+				line_before = line_now
+				line_now = f_r.readline()  # 读新行
+				continue
+
+			if state == 'stop':#如果当前是停止状态
+				if distance([lon_now,lat_now],[lon_before,lat_before]) < 10:#当前这条相对于上条记录是停止
+					if judge_move:#倘若之前是在一个move待定周期
+						# 这个待定周期作废了，待定周期里面的运动记录不输出
+						# 清空待写出列表
+						judge_move = False
+						move_pending_array = []
+					#输出现在的这条stop记录
+					w_str = str(-1) + ',stop,' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) +','+str(dis)+ '\n'
+					f_w.write(w_str)
+				else:#这条记录相比于上一条是运动了的，检查是不是在运动待定周期
+					if judge_move:#在一个move检查周期内（检查move有没有达到1min）
+						if (time_now - judge_move_start_time) > 60 :
+							state = 'move'#切换到运动状态
+							judge_stop = False#初始化运动状态切换到静止态的判断条件
+							#写出列表里的待写出项（历史项）
+							for str_item in move_pending_array:
+								f_w.write(str_item)
+								count += 1
+							move_pending_array = []#写出后，清空数组
+							#当前的这条记录也要写出去
+							angle = calAngle(lat_before, lon_before,lat_now, lon_now)
+							w_str = str(count) + ',' + str(angle) + ',' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) +','+str(dis)+ '\n'
+							f_w.write(w_str)
+							count += 1
+						else:
+							#虽然在运动，但还没满足状态条件，先写到列表里
+							angle = calAngle(lat_before, lon_before,lat_now, lon_now)
+							w_str = str(count + len(move_pending_array)) + ',' + str(angle) + ',' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) +','+str(dis)+ '\n'
+							move_pending_array.append(w_str)
+					else:#开启一个move待定周期，记录待定周期的开始时间
+						judge_move = True
+						judge_move_start_time = time_now
+						#先写到列表里
+						angle = calAngle(lat_before, lon_before,lat_now, lon_now)
+						w_str = str(count + len(move_pending_array)) + ',' + str(angle) + ',' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) + ','+str(dis) + '\n'
+						move_pending_array.append(w_str)
+			else:#当前是运动周期
+				if distance([lon_now,lat_now],[lon_before,lat_before]) >= 10:#且当前这条记录相较于上条也运动，保持运动状态，写出
+					if judge_stop:
+						# 这个stop待定周期作废了
+						judge_stop = False
+						#把这个待定周期里面的记录写出去
+						for str_item in stop_pending_array:
+							rec = str_item.split(',')
+							w_str = rec[0] + ',' + rec[1] + ',' + rec[2] + ',' + rec[3] + ',' + rec[4] + ',' + rec[5].split('\n')[0]+',pending stop\n'
+							f_w.write(w_str)
+							count += 1
+						stop_pending_array = []
+					#写出当前这条运动记录
+					angle = calAngle(lat_before, lon_before,lat_now, lon_now)
+					w_str = str(count) + ',' + str(angle) + ',' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) +','+str(dis)+ '\n'
+					f_w.write(w_str)
+					count += 1
+				else:#这条记录相比于上一条是静止的，检查是否在静止待定周期
+					if judge_stop:#在一个stop检查周期内（检查stop有没有达到10min）
+						if (time_now - judge_stop_start_time) > 600:
+							judge_move = False
+							state = 'stop'
+							# 写出列表里的待写出项（这些项不能算到trip里，所以把其方向改为stop)
+							for str_item in stop_pending_array:
+								rec = str_item.split(',')
+								w_str = str(-1) + ',stop,' + rec[2] + ',' + rec[3] + ',' + rec[4] + ',' + rec[5]
+								f_w.write(w_str)
+							stop_pending_array = []
+							#输出当前这条记录
+							w_str = str(-1) + ',stop,' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) +','+str(dis)+ '\n'
+							f_w.write(w_str)
+						else:
+							#虽然静止，但还没满足状态条件，把待定静止的记录写到数组中
+							angle = calAngle(lat_before, lon_before, lat_now, lon_now)
+							w_str = str(count + len(stop_pending_array)) + ',' + str(angle) + ',' + str(time_now) + ',' + str(lon_now) + ',' + str(lat_now) + ',' + str(dis) + '\n'
+							stop_pending_array.append(w_str)
+					else:#开启一个stop检查周期
+						judge_stop = True
+						judge_stop_start_time = time_now
+			line_before = line_now
+			line_now = f_r.readline()  # 读新行
 		f_r.close()
 		f_w.close()
+findDirection()
 
 #求出租车各段trip持续时间以及每段trip方向变化次数
 def findTrip():
@@ -374,7 +496,7 @@ def washData():
 	root = r'E:' + s + 'datasets' + s + 'NewChengdu' + s + 'cabspottingdata'
 	out = r'E:'+s+'VNDN'+s+'Chengdu'+s+'60sec_taxi_log_2008_by_id'
 	mkdir(out)
-	for i in range(1, 5000):
+	for i in range(1, 7000):
 		filename = root + s + str(i) + '.csv'
 		try:
 			print filename
@@ -405,7 +527,7 @@ def washData():
 			average_gap_time = (average_gap_time * count + gap_time) / (count + 1)
 			count += 1
 		print average_gap_time
-		if average_gap_time > 10:
+		if average_gap_time > 15:
 			f_r.close()
 			continue  # 淘汰这个文件
 		#否则把这个文件倒腾出来
@@ -423,7 +545,7 @@ def washData():
 		while line_org:
 			m_w.write(line_org)
 			line_org = f_r.readline()  # 读新行
-washData()
+
 
 
 #统计cruise时间的分布情况
