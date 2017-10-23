@@ -172,7 +172,6 @@ def distance(position1,position2):
 	b = position1[0] - position2[0]
 	s = 2*asin(sqrt(sin(a/2)*sin(a/2)+cos(position1[1])*cos(position2[1])*sin(b/2)*sin(b/2)))*6378.13
 	return s
-	#return sqrt((position1[0] - position2[0])*(position1[0] - position2[0])*3750*3750 + (position1[1] - position2[1])*(position1[1] - position2[1])*6378*6378)
 
 #求汽车各个时刻的行驶方向
 #时刻1的行驶方向由时刻1+时刻2两点的坐标求出，以此类推
@@ -226,8 +225,7 @@ def findDirection():
 				continue
 			#计算当前这条记录相较于上一条记录的距离
 			dis = distance([lon_now,lat_now],[lon_before,lat_before])
-			if time_now == 1202304123:
-				print '??'
+
 			#特别处理时间间隔大于3600的情况
 			if abs(time_now - time_before) > 3600:
 				if state == 'stop':
@@ -263,7 +261,7 @@ def findDirection():
 				continue
 
 			if state == 'stop':#如果当前是停止状态
-				if distance([lon_now,lat_now],[lon_before,lat_before]) < 10:#当前这条相对于上条记录是停止
+				if distance([lon_now,lat_now],[lon_before,lat_before]) < 83.3:#当前这条相对于上条记录平均速度小于5km/h
 					if judge_move:#倘若之前是在一个move待定周期
 						# 这个待定周期作废了，待定周期里面的运动记录不输出
 						# 清空待写出列表
@@ -342,7 +340,7 @@ def findDirection():
 			line_now = f_r.readline()  # 读新行
 		f_r.close()
 		f_w.close()
-#findDirection()
+
 
 # 计算两个角度的夹角
 def deltaAngle(angle1, angle2):
@@ -694,18 +692,19 @@ def showTrip():
 		# f_w.write('注：'+','+str(angle_last) + ',' + str(cruise_start_angle) + ',' + str(cruise_average_angle) + '\n')
 		# 接下来考虑trip
 		# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
-		inTrip = False
-		duration = tripEndTime - tripStartTime
-		if duration < 0:  # 小于60s记录的情况，不要
-			# 接下来重新开始一段trip,trip标号不变化
-			f_w.write(line_old)  # 这行stop写在标记后
-			f_w.write('======================================================== trip DROP \n')
-			cruiseNumber = 1  # 由于被抛弃，trip编号不改变
-		else:
-			f_w.write(line_old)  # 这行stop写在标记后
-			f_w.write('========================================================= trip END \n')
-			tripNumber = tripNumber + 1  # 接下来重新开始一段trip
-			cruiseNumber = 1
+		if inTrip:
+			inTrip = False
+			duration = tripEndTime - tripStartTime
+			if duration < 0:  # 小于60s记录的情况，不要
+				# 接下来重新开始一段trip,trip标号不变化
+				f_w.write(line_old)  # 这行stop写在标记后
+				f_w.write('======================================================== trip DROP \n')
+				cruiseNumber = 1  # 由于被抛弃，trip编号不改变
+			else:
+				f_w.write(line_old)  # 这行stop写在标记后
+				f_w.write('========================================================= trip END \n')
+				tripNumber = tripNumber + 1  # 接下来重新开始一段trip
+				cruiseNumber = 1
 		f_r.close()
 		f_w.close()
 
