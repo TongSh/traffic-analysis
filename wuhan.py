@@ -96,82 +96,17 @@ def mkdir(path):
 		return False
 
 
-def angle_avg(angle,n):
+def angle_avg(angle, n):
 	diff = 0.0
 	last = angle[0]
-	sum  = angle[0]
+	sum = angle[0]
 	i = 0
-	for i in range(1,n):
+	for i in range(1, n):
 		last += (angle[i] - angle[i - 1] + 180) % 360 - 180
-		sum  += last
+		sum += last
 	sum = float(sum)
-	return (sum/n)%360
+	return (sum / n) % 360
 
-
-# 数据源包括10357辆出租车样本，只记录各车在各时刻的坐标
-# 求汽车各个时刻的行驶方向
-# 时刻1的行驶方向由时刻1+时刻2两点的坐标求出，以此类推
-# 排除两时刻差距过大的情况（超过3min）
-# 需要格外注意相邻两时刻坐标相同的情况，这意味着车辆静止，是一段trip结束的标志
-def findDirection():
-	# 依次读各个文件
-	# 写出文件夹
-	s = os.sep  # 根据unix或win，s为\或/
-	root = r'E:' + s + 'datasets' + s + 'New Beijing'
-	out1 = r'E:\datasets\New Beijing\direction result 60sec\\'
-	mkdir(out1)
-
-	dir_result = r'E:\datasets\New Beijing\60sec_taxi_log_2008_by_id'
-	list = os.listdir(dir_result)  # 列出目录下的所有文件
-	for line in list:
-		filename2 = dir_result + s + line
-		print filename2
-		try:
-			f_r = open(filename2, 'r')
-		except IOError:
-			continue
-		# 行驶方向结果写出
-		w_filename2 = r'E:\datasets\New Beijing\direction result 60sec\\' + line.split('.')[0] + '.csv'
-		try:
-			f_w = open(w_filename2, 'w')
-		except IOError:
-			continue
-		line_org = f_r.readline()  # 首行title 调用文件的 readline()方法
-		count = 1
-		isFirstStop = True
-		# 一行行读
-		while line_org:
-			line = line_org.split(',')
-			# 时刻1坐标
-			lon1 = float(line[2])
-			lat1 = float(line[3])
-			# 时刻1
-			time1 = time.mktime(time.strptime(line[1], "%Y-%m-%d %H:%M:%S"))
-			line_org = f_r.readline()  # 读新行
-			# 如果新行已经是文件尾，跳出
-			if not line_org:
-				break
-			line = line_org.split(',')
-			# 时刻2坐标
-			lon2 = float(line[2])
-			lat2 = float(line[3])
-			# 时刻2
-			time2 = time.mktime(time.strptime(line[1], "%Y-%m-%d %H:%M:%S"))
-			# 如果两点重合，额外标注 只要移动在1米内，算作静止
-			if abs(lon1 - lon2) < 0.0003 and abs(lat1 - lat2) < 0.00016:
-				if isFirstStop:  # 连续的stop只输出一次
-					w_str = '-1,stop,' + str(time1) + '\n'
-					f_w.write(w_str)
-					isFirstStop = False
-				continue
-			# 计算出两点呈现的角度
-			angle = calAngle2(lat1, lon1, lat2, lon2)
-			w_str = str(count) + ',' + str(angle) + ',' + str(time1) + '\n'
-			f_w.write(w_str)
-			count = count + 1
-			isFirstStop = True
-		f_r.close()
-		f_w.close()
 
 
 # 计算两个角度的夹角
@@ -201,9 +136,6 @@ def findTrip():
 		# 将每段trip写出成一个文件，一辆车的存在一个文件夹下面,文件夹以车编号命名
 		trip_dir = out + s + line.split('.')[0]
 		mkdir(trip_dir)
-
-		# 写出Trip Cruise统计结果（trip序号，cruise序号，持续时间duration）
-		# 下面这个f_w肯定会被close
 		try:
 			f_w = open(root + s + '1.csv', 'w')
 		except IOError:
@@ -245,28 +177,26 @@ def findTrip():
 					angle_now = dir
 					# cruise终止条件
 					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(angle_now, cruise_average_angle) > 30:
-						# 一段cruise结束了
-						if cruiseEndTime - cruiseStartTime > 0:  #排除10秒以下的cruise
-							str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(
-								cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
+						# 一段cruise结束了，写出
+						if cruiseEndTime - cruiseStartTime > 10:  # 排除10秒以下的cruise
+							str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
 							f_w.write(str_w)
 							cruiseNumber = cruiseNumber + 1
-						# 重新开始一段cruise
+						# 然后重新开始一段cruise
 						angle_last = angle_now
 						cruise_start_angle = angle_now  # 一段cruise开始时候的方向角
-						cruise_average_angle = angle_now  # 初始平均值
+						cruise_average_angle = angle_now  # 初始化角度平均值
 						count_for_average = 1
 						cruiseStartTime = timeSec
-					# 否则，更新cruise_average_angle
-					angle_array = [cruise_average_angle] * count_for_average
-					angle_array.append(angle_now)
-					cruise_average_angle = angle_avg(angle_array,count_for_average + 1)
-					#cruise_average_angle = (cruise_average_angle * count_for_average + angle_now) / (count_for_average + 1)
-					count_for_average += 1
-					angle_last = angle_now
-					cruiseEndTime = timeSec  # 实时更新的
-					continue  # 一段trip还没有结束
-				else:  # 遇到了stop
+					else:
+						# 否则，更新cruise_average_angle
+						angle_array = [cruise_average_angle] * count_for_average
+						angle_array.append(angle_now)
+						cruise_average_angle = angle_avg(angle_array, count_for_average + 1)
+						count_for_average += 1
+						angle_last = angle_now
+						cruiseEndTime = timeSec  # 实时更新的
+				else:  # 停止了
 					# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
 					inTrip = False
 					duration = tripEndTime - tripStartTime
@@ -277,10 +207,8 @@ def findTrip():
 					# 这也意味着一段cruise结束了。输出这段cruise的持续时间
 					cruiseEndTime = tripEndTime  # 一段cruise结束了
 					# 排除10秒以下的cruise
-					if cruiseEndTime - cruiseStartTime > 0:
-						str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(
-							cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(
-							cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
+					if cruiseEndTime - cruiseStartTime > 10:
+						str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
 						f_w.write(str_w)
 					# 接下来重新开始一段trip
 					tripNumber = tripNumber + 1
@@ -304,23 +232,19 @@ def findTrip():
 					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
 				else:
 					continue  # 保持静止
-		inTrip = False
+		#文件末尾，跳出循环
 		duration = tripEndTime - tripStartTime
 		if duration <= 0:  # 一条记录的情况，不要
-			# 接下来重新开始一段trip,trip标号不变化
-			cruiseNumber = 1
 			continue
 		# 这也意味着一段cruise结束了。输出这段cruise的持续时间
 		cruiseEndTime = tripEndTime  # 一段cruise结束了
 		# 排除10秒以下的cruise
-		if cruiseEndTime - cruiseStartTime > 0:
+		if cruiseEndTime - cruiseStartTime > 10:
 			str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
 			f_w.write(str_w)
-		# 接下来重新开始一段trip
-		tripNumber = tripNumber + 1
-		cruiseNumber = 1
 		f_r.close()
 		f_w.close()
+
 
 # 输出所有巡航
 def findCruise():
@@ -383,11 +307,12 @@ def findCruise():
 					# 统计方向变化
 					angle_now = dir
 					# cruise终止条件
-					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(
-							angle_now, cruise_average_angle) > 30:
+					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,
+																			cruise_start_angle) > 45 or deltaAngle(
+						angle_now, cruise_average_angle) > 30:
 						# 一段cruise结束了
 						if cruiseEndTime - cruiseStartTime > 10:  # 排除10秒以下的cruise
-							#写出一个数组
+							# 写出一个数组
 							for cruise_item in cruiseArray:
 								f_w.write(cruise_item)
 							cruiseArray = []
@@ -403,8 +328,8 @@ def findCruise():
 					angle_array.append(angle_now)
 					cruise_average_angle = angle_avg(angle_array, count_for_average + 1)
 
-					#将cruise的记录加到数组
-					cruise_str = str(cruiseNumber)+','+str(angle_now)+','+str(timeSec)+'\n'
+					# 将cruise的记录加到数组
+					cruise_str = str(cruiseNumber) + ',' + str(angle_now) + ',' + str(timeSec) + '\n'
 					cruiseArray.append(cruise_str)
 
 					# cruise_average_angle = (cruise_average_angle * count_for_average + angle_now) / (count_for_average + 1)
@@ -459,7 +384,7 @@ def findCruise():
 		# 这也意味着一段cruise结束了。输出这段cruise的持续时间
 		cruiseEndTime = tripEndTime  # 一段cruise结束了
 		# 排除10秒以下的cruise
-		if cruiseEndTime - cruiseStartTime > 0:
+		if cruiseEndTime - cruiseStartTime > 10:
 			# 写出一个数组
 			for cruise_item in cruiseArray:
 				f_w.write(cruise_item)
@@ -479,12 +404,12 @@ def findLongTrip():
 	out = root + s + 'T Trip Cruise'
 	mkdir(out)
 	list = os.listdir(trip_dir)  # 列出目录下的所有文件
+	tripNumber = 1  # 记录最终要的trip编号
 	for num in list:
 		# 读初步统计结果（序号，行驶方向，时间）
 		dir_name = trip_dir + s + num
 		list2 = os.listdir(dir_name)
-		tripNumber = 1  # 记录最终要的trip编号
-		# 挨个读取trip文件，根据trip时间，少于60s的剔除
+		# 挨个读取trip文件
 		for m_trip in list2:
 			trip_time = 0
 			try:
@@ -492,6 +417,7 @@ def findLongTrip():
 			except IOError:
 				continue
 			line_org = f_r.readline()  # 首行,调用文件的 readline()方法
+			#循环的方法，统计trip时间
 			while line_org:
 				line = line_org.split(',')
 				timeSec = int(line[2])  # trip中一个cruise时间片
@@ -501,7 +427,7 @@ def findLongTrip():
 				continue  # 淘汰持续时间少于60s的trip
 			# 否则要将这段trip写到统计文件中
 			try:
-				f_w = open(root + s +  'total.csv', 'a')
+				f_w = open(root + s + 'total.csv', 'a')
 			except IOError:
 				continue
 			# 为了写而重新读取
@@ -514,11 +440,12 @@ def findLongTrip():
 			while line_org:
 				line = line_org.split(',')
 				line[0] = str(tripNumber)  # 修改trip编号
-				f_w.write(line[0] + ',' + line[1] + ',' + line[2] + ',' + line[3] + ',' + line[4] + ',' + line[5] + ',' + line[6])
+				f_w.write(line[0] + ',' + line[1] + ',' + line[2] + ',' + line[3] + ',' + line[4] + ',' + line[5] + ',' +line[6])
 				line_org = f_r.readline()
 			tripNumber += 1
 			f_w.close()
 			f_r.close()
+
 
 # 直观展示怎么切割trip和cruise
 def showTrip():
@@ -579,7 +506,7 @@ def showTrip():
 					# cruise终止条件
 					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,
 																			cruise_start_angle) > 45 or deltaAngle(
-							angle_now, cruise_average_angle) > 30:
+						angle_now, cruise_average_angle) > 30:
 						# 一段cruise结束了
 						if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
 							f_w.write(' cruise END ###################################\n')
@@ -643,10 +570,10 @@ def showTrip():
 				else:
 					f_w.write(line_old)
 					continue  # 保持静止，就不一直写出stop了
-		#文件末尾，意味着一段trip的结束
+		# 文件末尾，意味着一段trip的结束
 		# 首先先考虑，这意味着一段cruise结束了。
 		cruiseEndTime = tripEndTime
-		#f_w.write(line_old)  # 这行stop写在标记后
+		# f_w.write(line_old)  # 这行stop写在标记后
 		# 排除10秒以下的cruise
 		if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
 			f_w.write(' cruise END ###################################\n')
@@ -725,8 +652,8 @@ def average():
 def cruise():
 	s = os.sep  # 根据unix或win，s为\或/
 	# 每10度一组，统计各个组别的记录条数
-	cruise_time = [0] * 1000
-	root = r'E:' + s + 'datasets' + s + 'New Beijing' + s + 'Trip Cruise'
+	cruise_time = [0] * 100
+	root = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + 'T Trip Cruise'
 	list = os.listdir(root)  # 列出目录下的所有文件
 	for line in list:
 		# 读初步统计结果（序号，行驶方向，时间）
@@ -741,23 +668,23 @@ def cruise():
 		while line_org:
 			line = line_org.split(',')
 			cruise = int(line[2])
-			if cruise >= 1000:
+			if cruise >= 500:
 				line_org = f_r.readline()  # 读新行
 				continue
-			# print "dir=",dir,'   index=',(dir+180)/10
-			cruise_time[cruise] += 1
+			# int "dir=",dir,'   index=',(dir+180)/10
+			cruise_time[cruise / 5] += 1
 			line_org = f_r.readline()  # 读新行
 		f_r.close()
 
 	# 统计结果写出
-	w_filename2 = r'E:' + s + 'datasets' + s + 'New Beijing' + s + 'cruise_result.csv'
+	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + 'cruise_5.csv'
 	try:
 		f_w = open(w_filename2, 'w')
 	except IOError:
 		print IOError
 
-	for i in range(0, 1000):
-		str_f = str(i) + ',' + str(cruise_time[i]) + '\n'
+	for i in range(0, 500, 5):
+		str_f = str(i) + ',' + str(cruise_time[i / 5]) + '\n'
 		print str_f
 		f_w.write(str_f)
 	f_w.close()
@@ -786,26 +713,29 @@ def dirDistribution():
 			line = line_org.split(',')
 			dir = float(line[3])
 			# print "dir=",dir,'   index=',(dir+180)/10,' car',line1
-
-			means_dir[int((dir))] = means_dir[int((dir))] + 1
+			if dir <= 0 or dir > 360:
+				line_org = f_r.readline()  # 读新行
+				continue
+			means_dir[int(dir / 10) % 36] = means_dir[int(dir / 10) % 36] + 1
 			line_org = f_r.readline()  # 读新行
 		f_r.close()
 
 	# 统计结果写出
-	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + '1angle_result.csv'
+	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + '1angle_cruise_average.csv'
 	try:
 		f_w = open(w_filename2, 'w')
 	except IOError:
 		print IOError
 	c = 0
-	for i in range(0, 360, 1):
+	for i in range(0, 360, 10):
 		str_f = str(i) + ',' + str(means_dir[c]) + '\n'
 		print str_f
 		f_w.write(str_f)
 		c = c + 1
 	f_w.close()
 
-#所有散点
+
+# 所有散点
 def dirDistributionAll():
 	s = os.sep  # 根据unix或win，s为\或/
 	# 每10度一组，统计各个组别的记录条数
@@ -827,11 +757,11 @@ def dirDistributionAll():
 		while line_org:
 			line = line_org.split(',')
 			dir = float(line[5])
-			if dir <= 0 or dir >360:
+			if dir <= 0 or dir > 360:
 				line_org = f_r.readline()  # 读新行
 				continue
-			#print "dir=",dir,'   index=',int(dir)
-			means_dir[int(dir/10)%36] = means_dir[int(dir/10)%36] + 1
+			# print "dir=",dir,'   index=',int(dir)
+			means_dir[int(dir / 10) % 36] = means_dir[int(dir / 10) % 36] + 1
 			line_org = f_r.readline()  # 读新行
 		f_r.close()
 
@@ -849,7 +779,8 @@ def dirDistributionAll():
 		c = c + 1
 	f_w.close()
 
-#巡航所有点
+
+# 巡航所有点
 def dirDistributionCruiseAll():
 	s = os.sep  # 根据unix或win，s为\或/
 	# 每10度一组，统计各个组别的记录条数
@@ -871,11 +802,11 @@ def dirDistributionCruiseAll():
 		while line_org:
 			line = line_org.split(',')
 			dir = float(line[1])
-			if dir <= 0 or dir >360:
+			if dir <= 0 or dir > 360:
 				line_org = f_r.readline()  # 读新行
 				continue
-			#print "dir=",dir,'   index=',int(dir)
-			means_dir[int(dir/10)%36] = means_dir[int(dir/10)%36] + 1
+			# print "dir=",dir,'   index=',int(dir)
+			means_dir[int(dir / 10) % 36] = means_dir[int(dir / 10) % 36] + 1
 			line_org = f_r.readline()  # 读新行
 		f_r.close()
 
@@ -892,13 +823,15 @@ def dirDistributionCruiseAll():
 		f_w.write(str_f)
 		c = c + 1
 	f_w.close()
-#findLongTrip()
-#findDirection()
-#findTrip()
-#dirDistribution()
-# average()
+
+
+findLongTrip()
+# findDirection()
+# findTrip()
+# dirDistribution()
+#average()
 # cruise()
-#showTrip()
-#dirDistributionAll()
-#findCruise()
-#dirDistributionCruiseAll()
+# showTrip()
+# dirDistributionAll()
+# findCruise()
+# dirDistributionCruiseAll()
