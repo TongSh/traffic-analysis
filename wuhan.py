@@ -161,6 +161,10 @@ def findTrip():
 		# 为求平均角度而用来计数
 		count_for_average = 0
 		timeSec = int(line_org.split(',')[1])  # 初始时间
+
+		pending_stop = False#用于判断是否真的停止
+		pending_stop_start_time = 0.0#状态开始时间
+
 		# 一行行读
 		while line_org:
 			line = line_org.split(',')
@@ -172,11 +176,20 @@ def findTrip():
 			line_org = f_r.readline()
 			if inTrip:
 				if speed > 0 and (timeSec - timeSec_old) < 3600:  # cruise还没结束
-					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
 					# 统计方向变化
 					angle_now = dir
+					if pending_stop:#解除pending stop状态
+						# 然后重新开始一段cruise
+						angle_last = angle_now
+						cruise_start_angle = angle_now  # 一段cruise开始时候的方向角
+						cruise_average_angle = angle_now  # 初始化角度平均值
+						count_for_average = 1
+						cruiseStartTime = timeSec
+						pending_stop = False
+					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
+
 					# cruise终止条件
-					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(angle_now, cruise_average_angle) > 30:
+					if deltaAngle(angle_now, angle_last) > 20 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(angle_now, cruise_average_angle) > 30:
 						# 一段cruise结束了，写出
 						if cruiseEndTime - cruiseStartTime > 10:  # 排除10秒以下的cruise
 							str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
@@ -197,22 +210,53 @@ def findTrip():
 						angle_last = angle_now
 						cruiseEndTime = timeSec  # 实时更新的
 				else:  # 停止了
-					# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
-					inTrip = False
-					duration = tripEndTime - tripStartTime
-					if duration <= 0:  # 一条记录的情况，不要
-						# 接下来重新开始一段trip,trip标号不变化
+					if speed == 0:#当前记录的速度为0，判断是否是真的停止（停止超过两分钟才算真的停）
+						if pending_stop:#如果当前是pending stop 状态，判断状态持续时间有没有超过两分钟
+							if timeSec - pending_stop_start_time > 120:#是真的停了,写trip判停的指令
+								pending_stop = False
+								inTrip = False
+								duration = tripEndTime - tripStartTime#tripEndTime只有在读到运动记录的时候才会更新
+								if duration == 0:# 一条记录的情况，不要
+									# 接下来重新开始一段trip,trip标号不变化
+									cruiseNumber = 1
+									continue
+								# 这也意味着一段cruise结束了。输出这段cruise的持续时间
+								cruiseEndTime = tripEndTime  # 一段cruise结束了
+								# 排除10秒以下的cruise
+								if cruiseEndTime - cruiseStartTime > 10:
+									str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
+									f_w.write(str_w)
+								# 接下来重新开始一段trip
+								tripNumber = tripNumber + 1
+								cruiseNumber = 1
+							else:#pending stop 还需要继续
+								pass
+						else:#当前不是pending stop状态，设置标志进入
+							pending_stop = True
+							pending_stop_start_time = timeSec
+							cruiseEndTime = tripEndTime#由于tripEndTime是读到运动记录后不断更新得到的，现在指向最后一条运动记录的时刻
+							#并且结束上一段巡航
+							if cruiseEndTime - cruiseStartTime > 10:  # 排除10秒以下的cruise
+								str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
+								f_w.write(str_w)
+								cruiseNumber = cruiseNumber + 1
+					else:#超过3600限制,可以判断一段trip的停止
+						# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
+						inTrip = False
+						duration = tripEndTime - tripStartTime
+						if duration <= 0:  # 一条记录的情况，不要
+							# 接下来重新开始一段trip,trip标号不变化
+							cruiseNumber = 1
+							continue
+						# 这也意味着一段cruise结束了。输出这段cruise的持续时间
+						cruiseEndTime = tripEndTime  # 一段cruise结束了
+						# 排除10秒以下的cruise
+						if cruiseEndTime - cruiseStartTime > 10:
+							str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
+							f_w.write(str_w)
+						# 接下来重新开始一段trip
+						tripNumber = tripNumber + 1
 						cruiseNumber = 1
-						continue
-					# 这也意味着一段cruise结束了。输出这段cruise的持续时间
-					cruiseEndTime = tripEndTime  # 一段cruise结束了
-					# 排除10秒以下的cruise
-					if cruiseEndTime - cruiseStartTime > 10:
-						str_w = str(tripNumber) + ',' + str(cruiseNumber) + ',' + str(cruiseEndTime - cruiseStartTime) + ',' + str(cruise_average_angle) + ',' + str(cruise_start_angle) + ',' + str(cruiseStartTime) + ',' + str(cruiseEndTime) + '\n'
-						f_w.write(str_w)
-					# 接下来重新开始一段trip
-					tripNumber = tripNumber + 1
-					cruiseNumber = 1
 			else:
 				if speed > 0:
 					inTrip = True  # 一段trip开始了
@@ -245,12 +289,11 @@ def findTrip():
 		f_r.close()
 		f_w.close()
 
-
 # 输出所有巡航
 def findCruise():
 	s = os.sep  # 根据unix或win，s为\或/
 	root = r'E:' + s + 'VNDN' + s + 'Wuhan'
-	dir_result = root + s + 'Track\\'  # 车辆方向结果
+	dir_result = root + s + 'Track'  # 车辆方向结果
 	out = root + s + 'Cruise\\'
 	mkdir(out)
 	list = os.listdir(dir_result)  # 列出目录下的所有文件
@@ -307,9 +350,7 @@ def findCruise():
 					# 统计方向变化
 					angle_now = dir
 					# cruise终止条件
-					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,
-																			cruise_start_angle) > 45 or deltaAngle(
-						angle_now, cruise_average_angle) > 30:
+					if deltaAngle(angle_now, angle_last) > 20 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(angle_now, cruise_average_angle) > 30:
 						# 一段cruise结束了
 						if cruiseEndTime - cruiseStartTime > 10:  # 排除10秒以下的cruise
 							# 写出一个数组
@@ -427,7 +468,7 @@ def findLongTrip():
 				continue  # 淘汰持续时间少于60s的trip
 			# 否则要将这段trip写到统计文件中
 			try:
-				f_w = open(root + s + 'total.csv', 'a')
+				f_w = open(out + s + str(num)+'.csv', 'a')
 			except IOError:
 				continue
 			# 为了写而重新读取
@@ -445,7 +486,6 @@ def findLongTrip():
 			tripNumber += 1
 			f_w.close()
 			f_r.close()
-
 
 # 直观展示怎么切割trip和cruise
 def showTrip():
@@ -488,6 +528,11 @@ def showTrip():
 		# 为求平均角度而用来计数
 		count_for_average = 0
 		timeSec = int(line_new.split(',')[1])  # 初始时间
+
+		pending_stop = False  # 用于判断是否真的停止
+		pending_stop_start_time = 0.0  # 状态开始时间
+		pending_stop_array = []#暂存停止的记录
+
 		# 一行行读
 		while line_new:
 			line = line_new.split(',')
@@ -500,13 +545,24 @@ def showTrip():
 			line_new = f_r.readline()
 			if inTrip:
 				if speed > 0 and (timeSec - timeSec_old) < 3600:  # cruise还没结束
-					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
 					# 统计方向变化
 					angle_now = dir
+					if pending_stop:
+						pending_stop = False
+						for stop_item in pending_stop_array:
+							f_w.write(stop_item.split('\n')[0]+','+'pending stop\n')
+						pending_stop_array = []
+						f_w.write(' cruise START #################################\n')
+						# 重新开始一段cruise
+						angle_last = angle_now
+						cruise_start_angle = angle_now  # 一段cruise开始时候的方向角
+						cruise_average_angle = angle_now  # 初始平均值
+						count_for_average = 1
+						cruiseStartTime = timeSec
+					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
+
 					# cruise终止条件
-					if deltaAngle(angle_now, angle_last) > 15 or deltaAngle(angle_now,
-																			cruise_start_angle) > 45 or deltaAngle(
-						angle_now, cruise_average_angle) > 30:
+					if deltaAngle(angle_now, angle_last) > 20 or deltaAngle(angle_now,cruise_start_angle) > 45 or deltaAngle(angle_now, cruise_average_angle) > 30:
 						# 一段cruise结束了
 						if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
 							f_w.write(' cruise END ###################################\n')
@@ -532,27 +588,62 @@ def showTrip():
 						angle_last = angle_now
 						cruiseEndTime = timeSec  # 实时更新的
 				else:  # 遇到了stop
-					# 首先先考虑，这意味着一段cruise结束了。
-					cruiseEndTime = tripEndTime
-					# 排除只有一条记录的cruise
-					if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
-						f_w.write(' cruise END ###################################\n')
-					else:
-						f_w.write(' cruise DROP ##################################\n')
-					# 接下来考虑trip
-					# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
-					inTrip = False
-					duration = tripEndTime - tripStartTime
-					if duration < 60:  # 小于60s记录的情况，不要
-						# 接下来重新开始一段trip,trip标号不变化
-						f_w.write(' trip DROP ====================================\n')
-						f_w.write(line_old)  # 这行stop写在标记后
-						cruiseNumber = 1  # 由于被抛弃，trip编号不改变
-					else:
-						f_w.write(' trip END =====================================\n')
-						f_w.write(line_old)  # 这行stop写在标记后
-						tripNumber = tripNumber + 1  # 接下来重新开始一段trip
-						cruiseNumber = 1
+					if speed == 0:#当前记录的速度为0，判断是否是真的停止（停止超过两分钟才算真的停）
+						if pending_stop:#如果当前是pending stop 状态，判断状态持续时间有没有超过两分钟
+							if timeSec - pending_stop_start_time > 120:#是真的停了,写trip判停的指令
+								pending_stop = False
+								inTrip = False
+								#由于cruise的结束在pending stop开始的时候就已经考虑了
+								# 接下来只要考虑trip
+								duration = tripEndTime - tripStartTime
+								if duration <= 0:  # 一条记录的情况，不要
+									# 接下来重新开始一段trip,trip标号不变化
+									f_w.write(' trip DROP ====================================\n')
+									cruiseNumber = 1  # 由于被抛弃，trip编号不改变
+								else:
+									f_w.write(' trip END =====================================\n')
+									tripNumber = tripNumber + 1  # 接下来重新开始一段trip
+									cruiseNumber = 1
+								# 输出所有pending stop记录
+								for stop_item in pending_stop_array:
+									f_w.write(stop_item)
+								pending_stop_array = []
+								f_w.write(line_old)  # 这行stop写在标记后
+							else:#pending stop 还需要继续，将读到的记录添加到array中
+								pending_stop_array.append(line_old)
+						else:#当前不是pending stop状态，设置标志进入
+							pending_stop = True
+							pending_stop_start_time = timeSec
+							#将读到的记录添加到array中
+							pending_stop_array.append(line_old)
+							cruiseEndTime = tripEndTime
+							if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
+								f_w.write(' cruise END ###################################\n')
+								cruiseNumber += 1
+							else:
+								f_w.write(' cruise DROP ##################################\n')
+					else:#超过3600限制,可以判断一段trip的停止
+						# 首先先考虑，这意味着一段cruise结束了。
+						cruiseEndTime = tripEndTime
+						# 排除只有一条记录的cruise
+						if cruiseEndTime - cruiseStartTime > 10:  # 正常结束
+							f_w.write(' cruise END ###################################\n')
+						else:
+							f_w.write(' cruise DROP ##################################\n')
+						# 接下来考虑trip
+						# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
+						inTrip = False
+						duration = tripEndTime - tripStartTime
+						if duration <= 0:  # 小于60s记录的情况，不要
+							# 接下来重新开始一段trip,trip标号不变化
+							f_w.write(' trip DROP ====================================\n')
+							f_w.write(line_old)  # 这行stop写在标记后
+							cruiseNumber = 1  # 由于被抛弃，trip编号不改变
+						else:
+							f_w.write(' trip END =====================================\n')
+							f_w.write(line_old)  # 这行stop写在标记后
+							tripNumber = tripNumber + 1  # 接下来重新开始一段trip
+							cruiseNumber = 1
 			else:
 				if speed > 0:
 					inTrip = True  # 一段trip开始了
@@ -583,7 +674,7 @@ def showTrip():
 		# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
 		inTrip = False
 		duration = tripEndTime - tripStartTime
-		if duration < 60:  # 小于60s记录的情况，不要
+		if duration <= 0:
 			# 接下来重新开始一段trip,trip标号不变化
 			f_w.write(' trip DROP ====================================\n')
 
@@ -594,7 +685,6 @@ def showTrip():
 			cruiseNumber = 1
 		f_r.close()
 		f_w.close()
-
 
 # 统计trip和crise的平均持续时间
 def average():
@@ -652,7 +742,7 @@ def average():
 def cruise():
 	s = os.sep  # 根据unix或win，s为\或/
 	# 每10度一组，统计各个组别的记录条数
-	cruise_time = [0] * 100
+	cruise_time = [0] * 50
 	root = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + 'T Trip Cruise'
 	list = os.listdir(root)  # 列出目录下的所有文件
 	for line in list:
@@ -672,23 +762,23 @@ def cruise():
 				line_org = f_r.readline()  # 读新行
 				continue
 			# int "dir=",dir,'   index=',(dir+180)/10
-			cruise_time[cruise / 5] += 1
+			cruise_time[cruise / 10] += 1
 			line_org = f_r.readline()  # 读新行
 		f_r.close()
 
 	# 统计结果写出
-	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + 'cruise_5.csv'
+	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + 'cruise_10.csv'
 	try:
 		f_w = open(w_filename2, 'w')
 	except IOError:
 		print IOError
 
-	for i in range(0, 500, 5):
-		str_f = str(i) + ',' + str(cruise_time[i / 5]) + '\n'
+	for i in range(0, 500, 10):
+		str_f = str(i) + ',' + str(cruise_time[i / 10]) + '\n'
 		print str_f
 		f_w.write(str_f)
 	f_w.close()
-
+cruise()
 
 # 统计行驶方向的分布情况
 def dirDistribution():
@@ -721,7 +811,7 @@ def dirDistribution():
 		f_r.close()
 
 	# 统计结果写出
-	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + '1angle_cruise_average.csv'
+	w_filename2 = r'E:' + s + 'VNDN' + s + 'Wuhan' + s + 'angle_cruise_average.csv'
 	try:
 		f_w = open(w_filename2, 'w')
 	except IOError:
@@ -733,7 +823,6 @@ def dirDistribution():
 		f_w.write(str_f)
 		c = c + 1
 	f_w.close()
-
 
 # 所有散点
 def dirDistributionAll():
@@ -825,13 +914,83 @@ def dirDistributionCruiseAll():
 	f_w.close()
 
 
-findLongTrip()
+#findLongTrip()
 # findDirection()
 # findTrip()
 # dirDistribution()
 #average()
 # cruise()
-# showTrip()
+#showTrip()
 # dirDistributionAll()
 # findCruise()
 # dirDistributionCruiseAll()
+# 求出租车各段trip持续时间以及每段trip方向变化次数
+# def onlyfindTrip():
+# 	s = os.sep  # 根据unix或win，s为\或/
+# 	root = r'E:' + s + 'VNDN' + s + 'Wuhan'
+# 	dir_result = root + s + 'Track\\'  # 车辆方向结果
+# 	out = root + s + 'Trip'
+# 	mkdir(out)
+# 	list = os.listdir(dir_result)  # 列出目录下的所有文件
+# 	for line in list:
+# 		# 读初步统计结果（序号，行驶方向，时间）
+# 		filename = dir_result + s + line
+# 		try:
+# 			f_r = open(filename, 'r')
+# 		except IOError:
+# 			continue
+# 		# 将每段trip写出成一个文件，一辆车的存在一个文件夹下面,文件夹以车编号命名
+# 		trip_dir = out + s + line.split('.')[0]
+# 		try:
+# 			f_w = open(out + s + 'a.csv', 'w')
+# 		except IOError:
+# 			continue
+#
+# 		line_org = f_r.readline()  # 首行,调用文件的 readline()方法
+# 		# 初始状态，都认为不是处在一段trip中
+# 		inTrip = False
+# 		# trip的起止时间
+# 		tripStartTime = 0
+# 		tripEndTime = 0
+#
+# 		# 序号
+# 		tripNumber = 1
+#
+# 		timeSec = int(line_org.split(',')[1])  # 初始时间
+# 		# 一行行读
+# 		while line_org:
+# 			line = line_org.split(',')
+# 			speed = float(line[4])
+# 			timeSec_old = timeSec  # 用于排除两条记录时间间隔过大的情况
+# 			timeSec = int(line[1])
+# 			# 读新行
+# 			line_org = f_r.readline()
+# 			if inTrip:
+# 				if speed > 0 and (timeSec - timeSec_old) < 3600:  # cruise还没结束
+# 					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
+# 				else:  # 停止了
+# 					# tripEndTime由前面不断更新得到，现在应该是最后一条运动记录的时刻
+# 					inTrip = False
+# 					duration = tripEndTime - tripStartTime
+# 					if duration > 0:  # 一条记录的情况，不要
+# 						w_str = str(tripNumber) + ',' + str(tripStartTime) + ',' + str(tripEndTime) + '\n'
+# 						f_w.write(w_str)
+# 					# 接下来重新开始一段trip
+# 					tripNumber = tripNumber + 1
+# 			else:
+# 				if speed > 0:
+# 					inTrip = True  # 一段trip开始了
+# 					# 准备写一个新的文件
+# 					tripStartTime = timeSec
+# 					tripEndTime = timeSec  # 不断更新的结束时间，直到真正结束
+# 				else:
+# 					continue  # 保持静止
+# 		#文件末尾，跳出循环
+# 		duration = tripEndTime - tripStartTime
+# 		if duration > 0:  # 一条记录的情况，不要
+# 			w_str = str(tripNumber) + ',' + str(tripStartTime) + ',' + str(tripEndTime) + '\n'
+# 			f_w.write(w_str)
+#
+# 		f_r.close()
+# 		f_w.close()
+# onlyfindTrip()
